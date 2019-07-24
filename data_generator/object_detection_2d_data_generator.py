@@ -322,7 +322,7 @@ class DataGenerator:
 
         data = []
 
-        with open(self.labels_filename, newline='') as csvfile:
+        with open(self.labels_filename,mode='r') as csvfile:
             csvread = csv.reader(csvfile, delimiter=',')
             next(csvread) # Skip the header row.
             for row in csvread: # For every line (i.e for every bounding box) in the CSV file...
