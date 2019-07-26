@@ -326,6 +326,7 @@ class DataGenerator:
             csvread = csv.reader(csvfile, delimiter=',')
             next(csvread) # Skip the header row.
             for row in csvread: # For every line (i.e for every bounding box) in the CSV file...
+                
                 if self.include_classes == 'all' or int(row[self.input_format.index('class_id')].strip()) in self.include_classes: # If the class_id is among the classes that are to be included in the dataset...
                     box = [] # Store the box class and coordinates here
                     box.append(row[self.input_format.index('image_name')].strip()) # Select the image name column in the input format and append its content to `box`
