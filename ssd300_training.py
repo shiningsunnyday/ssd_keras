@@ -8,7 +8,7 @@
 # You can find a summary of a full training here to get an impression of what it should look like:
 # [SSD300 "07+12" training summary](https://github.com/pierluigiferrari/ssd_keras/blob/master/training_summaries/ssd300_pascal_07%2B12_training_summary.md)
 
-# In[1]:
+# In[55]:
 
 
 from keras.optimizers import Adam, SGD
@@ -35,7 +35,7 @@ from data_generator.object_detection_2d_photometric_ops import ConvertTo3Channel
 from data_generator.data_augmentation_chain_original_ssd import SSDDataAugmentation
 from data_generator.object_detection_2d_misc_utils import apply_inverse_transforms
 
-# get_ipython().run_line_magic('matplotlib', 'inline')
+get_ipython().run_line_magic('matplotlib', 'inline')
 
 
 # ## 0. Preliminary note
@@ -50,7 +50,7 @@ from data_generator.object_detection_2d_misc_utils import apply_inverse_transfor
 # 
 # As mentioned above, the parameters set below are not only needed to build the model, but are also passed to the `SSDInputEncoder` constructor further down, which is responsible for matching and encoding ground truth boxes and anchor boxes during the training. In order to do that, it needs to know the anchor box parameters.
 
-# In[2]:
+# In[56]:
 
 
 img_height = 300 # Height of the model input images
@@ -95,7 +95,7 @@ normalize_coords = True
 # 
 # `SSDLoss` is a custom Keras loss function that implements the multi-task that consists of a log loss for classification and a smooth L1 loss for localization. `neg_pos_ratio` and `alpha` are set as in the paper.
 
-# In[1]:
+# In[59]:
 
 
 # 1: Build the Keras model.
@@ -120,7 +120,7 @@ model = ssd_300(image_size=(img_height, img_width, img_channels),
 # 2: Load some weights into the model.
 
 # TODO: Set the path to the weights you want to load.
-weights_path = 'ssd300_belgas_epoch-04_loss-8.8198_val_loss-8.1204.h5'
+weights_path = 'VGG_VOC_SSD_300_Belga.h5'
 
 model.load_weights(weights_path, by_name=True)
 
@@ -128,12 +128,12 @@ model.load_weights(weights_path, by_name=True)
 #    If you want to follow the original Caffe implementation, use the preset SGD
 #    optimizer, otherwise I'd recommend the commented-out Adam optimizer.
 
-adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-# sgd = SGD(lr=0.001, momentum=0.9, decay=0.0, nesterov=False)
+# adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
+sgd = SGD(lr=0.001, momentum=0.9, decay=0.0, nesterov=False)
 
 ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
 
-model.compile(optimizer=adam, loss=ssd_loss.compute_loss)
+model.compile(optimizer=sgd, loss=ssd_loss.compute_loss)
 
 
 # ### 2.2 Load a previously created model
@@ -144,7 +144,7 @@ model.compile(optimizer=adam, loss=ssd_loss.compute_loss)
 # 
 # This next code cell assumes that you want to load a model that was created in 'training' mode. If you want to load a model that was created in 'inference' or 'inference_fast' mode, you'll have to add the `DecodeDetections` or `DecodeDetectionsFast` layer type to the `custom_objects` dictionary below.
 
-# In[4]:
+# In[6]:
 
 
 # # TODO: Set the path to the `.h5` file of the model to be loaded.
@@ -178,7 +178,7 @@ model.compile(optimizer=adam, loss=ssd_loss.compute_loss)
 # 
 # In order to train the model on a dataset other than Pascal VOC, either choose `DataGenerator`'s appropriate parser method that corresponds to your data format, or, if `DataGenerator` does not provide a suitable parser for your data format, you can write an additional parser and add it. Out of the box, `DataGenerator` can handle datasets that use the Pascal VOC format (use `parse_xml()`), the MS COCO format (use `parse_json()`) and a wide range of CSV formats (use `parse_csv()`).
 
-# In[5]:
+# In[7]:
 
 
 # 1: Instantiate two `DataGenerator` objects: One for training, one for validation.
@@ -257,7 +257,7 @@ val_dataset.parse_csv(images_dir,labels_file_test,['image_name','xmin','xmax','y
 #                                 verbose=True)
 
 
-# In[6]:
+# In[8]:
 
 
 # 3: Set the batch size.
@@ -334,34 +334,37 @@ print("Number of images in the validation dataset:\t{:>6}".format(val_dataset_si
 # 
 # I'll set only a few essential Keras callbacks below, feel free to add more callbacks if you want TensorBoard summaries or whatever. We obviously need the learning rate scheduler and we want to save the best models during the training. It also makes sense to continuously stream our training history to a CSV log file after every epoch, because if we didn't do that, in case the training terminates with an exception at some point or if the kernel of this Jupyter notebook dies for some reason or anything like that happens, we would lose the entire history for the trained epochs. Finally, we'll also add a callback that makes sure that the training terminates if the loss becomes `NaN`. Depending on the optimizer you use, it can happen that the loss becomes `NaN` during the first iterations of the training. In later iterations it's less of a risk. For example, I've never seen a `NaN` loss when I trained SSD using an Adam optimizer, but I've seen a `NaN` loss a couple of times during the very first couple of hundred training steps of training a new model when I used an SGD optimizer.
 
-# In[7]:
+# In[9]:
 
 
 # Define a learning rate schedule.
 
 def lr_schedule(epoch):
+    return 0.0001
     if epoch < 2:
         return 0.001
-    else:
+    elif epoch < 5:
         return 0.0001
+    else:
+        return 0.00002
 
 
-# In[8]:
+# In[10]:
 
 
 # Define model callbacks.
 
 # TODO: Set the filepath under which you want to save the model.
-model_checkpoint = ModelCheckpoint(filepath='ssd300_belgas_epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
-                                   monitor='loss',
+model_checkpoint = ModelCheckpoint(filepath='./models/belgas_sgd/epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
+                                   monitor='val_loss',
                                    verbose=1,
-                                   save_best_only=True,
+                                   save_best_only=False,
                                    save_weights_only=False,
                                    mode='auto',
                                    period=1)
 #model_checkpoint.best = 
 
-csv_logger = CSVLogger(filename='ssd300_belgas_training_log.csv',
+csv_logger = CSVLogger(filename='./models/belgas_sgd_training_log.csv',
                        separator=',',
                        append=True)
 
@@ -385,13 +388,14 @@ callbacks = [model_checkpoint,
 # 2. In order for the learning rate scheduler callback above to work properly, `fit_generator()` needs to know which epoch we're in, otherwise it will start with epoch 0 every time you resume the training. Set `initial_epoch` to be the next epoch of your training. Note that this parameter is zero-based, i.e. the first epoch is epoch 0. If you had trained for 10 epochs previously and now you'd want to resume the training from there, you'd set `initial_epoch = 10` (since epoch 10 is the eleventh epoch). Furthermore, set `final_epoch` to the last epoch you want to run. To stick with the previous example, if you had trained for 10 epochs previously and now you'd want to train for another 10 epochs, you'd set `initial_epoch = 10` and `final_epoch = 20`.
 # 3. In order for the model checkpoint callback above to work correctly after a kernel restart, set `model_checkpoint.best` to the best validation loss from the previous training. If you don't do this and a new `ModelCheckpoint` object is created after a kernel restart, that object obviously won't know what the last best validation loss was, so it will always save the weights of the first epoch of your new training and record that loss as its new best loss. This isn't super-important, I just wanted to mention it.
 
-# In[9]:
+# In[11]:
 
 
 # If you're resuming a previous training, set `initial_epoch` and `final_epoch` accordingly.
-initial_epoch   = 3
-final_epoch     = 10
+initial_epoch   = 1
+final_epoch     = 50
 steps_per_epoch = 100
+
 
 history = model.fit_generator(generator=train_generator,
                               steps_per_epoch=steps_per_epoch,
@@ -408,12 +412,12 @@ history = model.fit_generator(generator=train_generator,
 # 
 # You can set the `shuffle` option to `False` if you would like to check the model's progress on the same image(s) over the course of the training.
 
-# In[10]:
+# In[40]:
 
 
 # # # 1: Set the generator for the predictions.
 
-# predict_generator = val_dataset.generate(batch_size=1,
+# predict_generator = val_dataset.generate(batch_size=100,
 #                                          shuffle=True,
 #                                          transformations=[convert_to_3_channels,
 #                                                           resize],
@@ -426,7 +430,7 @@ history = model.fit_generator(generator=train_generator,
 #                                          keep_images_without_gt=False)
 
 
-# In[47]:
+# In[43]:
 
 
 # # # 2: Generate samples.
@@ -440,39 +444,26 @@ history = model.fit_generator(generator=train_generator,
 # print("Ground truth boxes:\n")
 # print(np.array(batch_original_labels[i]))
 
-
-# In[48]:
-
-
 # # 3: Make predictions.
 
 # y_pred = model.predict(batch_images)
 # print(y_pred)
 
-
-# Now let's decode the raw predictions in `y_pred`.
-# 
-# Had we created the model in 'inference' or 'inference_fast' mode, then the model's final layer would be a `DecodeDetections` layer and `y_pred` would already contain the decoded predictions, but since we created the model in 'training' mode, the model outputs raw predictions that still need to be decoded and filtered. This is what the `decode_detections()` function is for. It does exactly what the `DecodeDetections` layer would do, but using Numpy instead of TensorFlow (i.e. on the CPU instead of the GPU).
-# 
-# `decode_detections()` with default argument values follows the procedure of the original SSD implementation: First, a very low confidence threshold of 0.01 is applied to filter out the majority of the predicted boxes, then greedy non-maximum suppression is performed per class with an intersection-over-union threshold of 0.45, and out of what is left after that, the top 200 highest confidence boxes are returned. Those settings are for precision-recall scoring purposes though. In order to get some usable final predictions, we'll set the confidence threshold much higher, e.g. to 0.5, since we're only interested in the very confident predictions.
-
-# In[49]:
-
-
 # # 4: Decode the raw predictions in `y_pred`.
 
 # y_pred_decoded = decode_detections(y_pred,
-#                                    confidence_thresh=0.3,
+#                                    confidence_thresh=0.2,
 #                                    iou_threshold=0.4,
 #                                    top_k=200,
 #                                    normalize_coords=normalize_coords,
 #                                    img_height=img_height,
 #                                    img_width=img_width)
+# print(y_pred_decoded)
 
 
 # We made the predictions on the resized images, but we'd like to visualize the outcome on the original input images, so we'll convert the coordinates accordingly. Don't worry about that opaque `apply_inverse_transforms()` function below, in this simple case it just aplies `(* original_image_size / resized_image_size)` to the box coordinates.
 
-# In[50]:
+# In[52]:
 
 
 # # 5: Convert the predictions for the original image.
@@ -482,12 +473,15 @@ history = model.fit_generator(generator=train_generator,
 # np.set_printoptions(precision=2, suppress=True, linewidth=90)
 # print("Predicted boxes:\n")
 # print('   class   conf xmin   ymin   xmax   ymax')
-# print(y_pred_decoded_inv[i])
+# while y_pred_decoded_inv[i].size == 0:
+#     i+=1
+    
+# i
 
 
 # Finally, let's draw the predicted boxes onto the image. Each predicted box says its confidence next to the category name. The ground truth boxes are also drawn onto the image in green for comparison.
 
-# In[51]:
+# In[53]:
 
 
 # # 5: Draw the predicted boxes onto the image
