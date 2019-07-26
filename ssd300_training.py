@@ -8,7 +8,7 @@
 # You can find a summary of a full training here to get an impression of what it should look like:
 # [SSD300 "07+12" training summary](https://github.com/pierluigiferrari/ssd_keras/blob/master/training_summaries/ssd300_pascal_07%2B12_training_summary.md)
 
-# In[55]:
+# In[3]:
 
 
 from keras.optimizers import Adam, SGD
@@ -35,7 +35,7 @@ from data_generator.object_detection_2d_photometric_ops import ConvertTo3Channel
 from data_generator.data_augmentation_chain_original_ssd import SSDDataAugmentation
 from data_generator.object_detection_2d_misc_utils import apply_inverse_transforms
 
-get_ipython().run_line_magic('matplotlib', 'inline')
+# get_ipython().run_line_magic('matplotlib', 'inline')
 
 
 # ## 0. Preliminary note
@@ -50,7 +50,7 @@ get_ipython().run_line_magic('matplotlib', 'inline')
 # 
 # As mentioned above, the parameters set below are not only needed to build the model, but are also passed to the `SSDInputEncoder` constructor further down, which is responsible for matching and encoding ground truth boxes and anchor boxes during the training. In order to do that, it needs to know the anchor box parameters.
 
-# In[56]:
+# In[4]:
 
 
 img_height = 300 # Height of the model input images
@@ -95,7 +95,7 @@ normalize_coords = True
 # 
 # `SSDLoss` is a custom Keras loss function that implements the multi-task that consists of a log loss for classification and a smooth L1 loss for localization. `neg_pos_ratio` and `alpha` are set as in the paper.
 
-# In[59]:
+# In[7]:
 
 
 # 1: Build the Keras model.
@@ -120,7 +120,7 @@ model = ssd_300(image_size=(img_height, img_width, img_channels),
 # 2: Load some weights into the model.
 
 # TODO: Set the path to the weights you want to load.
-weights_path = 'VGG_VOC_SSD_300_Belga.h5'
+weights_path = 'VGG_coco_SSD_Belga.h5'
 
 model.load_weights(weights_path, by_name=True)
 
@@ -392,7 +392,7 @@ callbacks = [model_checkpoint,
 
 
 # If you're resuming a previous training, set `initial_epoch` and `final_epoch` accordingly.
-initial_epoch   = 1
+initial_epoch   = 0
 final_epoch     = 50
 steps_per_epoch = 100
 
