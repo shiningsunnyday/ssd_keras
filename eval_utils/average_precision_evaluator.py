@@ -23,6 +23,7 @@ from math import ceil
 from tqdm import trange
 import sys
 import warnings
+import pdb
 
 from data_generator.object_detection_2d_data_generator import DataGenerator
 from data_generator.object_detection_2d_geometric_ops import Resize
@@ -617,6 +618,10 @@ class Evaluator:
                 print("No predictions for class {}/{}".format(class_id, self.n_classes))
                 true_positives.append(true_pos)
                 false_positives.append(false_pos)
+                cumulative_true_pos = np.cumsum(true_pos)  # Cumulative sums of the true positives
+                cumulative_false_pos = np.cumsum(false_pos)  # Cumulative sums of the false positives
+                cumulative_true_positives.append(cumulative_true_pos)
+                cumulative_false_positives.append(cumulative_false_pos)
                 continue
 
             # Convert the predictions list for this class into a structured array so that we can sort it by confidence.
@@ -736,6 +741,7 @@ class Evaluator:
             return true_positives, false_positives, cumulative_true_positives, cumulative_false_positives
 
     def compute_precision_recall(self, verbose=True, ret=False):
+
         '''
         Computes the precisions and recalls for all classes.
 
