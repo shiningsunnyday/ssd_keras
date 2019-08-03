@@ -1,11 +1,23 @@
+#!/usr/bin/env python
+# coding: utf-8
 
+# # SSD300 Training Tutorial
+# 
+# This tutorial explains how to train an SSD300 on the Pascal VOC datasets. The preset parameters reproduce the training of the original SSD300 "07+12" model. Training SSD512 works simiarly, so there's no extra tutorial for that. The same goes for training on other datasets.
+# 
+# You can find a summary of a full training here to get an impression of what it should look like:
+# [SSD300 "07+12" training summary](https://github.com/pierluigiferrari/ssd_keras/blob/master/training_summaries/ssd300_pascal_07%2B12_training_summary.md)
+
+# In[3]:
+
+ # Clear previous models from memory.
 from keras import backend as K
 from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
 
 K.clear_session()
 config = tf.ConfigProto(allow_soft_placement=True)
-config.gpu_options.per_process_gpu_memory_fraction = 0.25
+config.gpu_options.per_process_gpu_memory_fraction = 0.8
 sess = tf.Session(config=config)
 K.set_session(sess)
 
@@ -32,12 +44,31 @@ from data_generator.object_detection_2d_photometric_ops import ConvertTo3Channel
 from data_generator.data_augmentation_chain_original_ssd import SSDDataAugmentation
 from data_generator.object_detection_2d_misc_utils import apply_inverse_transforms
 
+
+# get_ipython().run_line_magic('matplotlib', 'inline')
+
+
+# ## 0. Preliminary note
+# 
+# All places in the code where you need to make any changes are marked `TODO` and explained accordingly. All code cells that don't contain `TODO` markers just need to be executed.
+
+# ## 1. Set the model configuration parameters
+# 
+# This section sets the configuration parameters for the model definition. The parameters set here are being used both by the `ssd_300()` function that builds the SSD300 model as well as further down by the constructor for the `SSDInputEncoder` object that is needed to run the training. Most of these parameters are needed to define the anchor boxes.
+# 
+# The parameters as set below produce the original SSD300 architecture that was trained on the Pascal VOC datsets, i.e. they are all chosen to correspond exactly to their respective counterparts in the `.prototxt` file that defines the original Caffe implementation. Note that the anchor box scaling factors of the original SSD implementation vary depending on the datasets on which the models were trained. The scaling factors used for the MS COCO datasets are smaller than the scaling factors used for the Pascal VOC datasets. The reason why the list of scaling factors has 7 elements while there are only 6 predictor layers is that the last scaling factor is used for the second aspect-ratio-1 box of the last predictor layer. Refer to the documentation for details.
+# 
+# As mentioned above, the parameters set below are not only needed to build the model, but are also passed to the `SSDInputEncoder` constructor further down, which is responsible for matching and encoding ground truth boxes and anchor boxes during the training. In order to do that, it needs to know the anchor box parameters.
+
+# In[4]:
+
+
 img_height = 300 # Height of the model input images
 img_width = 300 # Width of the model input images
 img_channels = 3 # Number of color channels of the model input images
 mean_color = [123, 117, 104] # The per-channel mean of the images in the dataset. Do not change this value if you're using any of the pre-trained weights.
 swap_channels = [2, 1, 0] # The color channel order in the original SSD is BGR, so we'll have the model reverse the color channel order of the input images.
-n_classes = 9 # Number of positive classes, e.g. 20 for Pascal VOC, 80 for MS COCO
+n_classes = 529 # Number of positive classes, e.g. 20 for Pascal VOC, 80 for MS COCO
 scales_pascal = [0.1, 0.2, 0.37, 0.54, 0.71, 0.88, 1.05] # The anchor box scaling factors used in the original SSD300 for the Pascal VOC datasets
 scales_coco = [0.07, 0.15, 0.33, 0.51, 0.69, 0.87, 1.05] # The anchor box scaling factors used in the original SSD300 for the MS COCO datasets
 scales = scales_pascal
@@ -53,6 +84,31 @@ offsets = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5] # The offsets of the first anchor box c
 clip_boxes = False # Whether or not to clip the anchor boxes to lie entirely within the image boundaries
 variances = [0.1, 0.1, 0.2, 0.2] # The variances by which the encoded target coordinates are divided as in the original implementation
 normalize_coords = True
+
+
+# ## 2. Build or load the model
+# 
+# You will want to execute either of the two code cells in the subsequent two sub-sections, not both.
+
+# ### 2.1 Create a new model and load trained VGG-16 weights into it (or trained SSD weights)
+# 
+# If you want to create a new SSD300 model, this is the relevant section for you. If you want to load a previously saved SSD300 model, skip ahead to section 2.2.
+# 
+# The code cell below does the following things:
+# 1. It calls the function `ssd_300()` to build the model.
+# 2. It then loads the weights file that is found at `weights_path` into the model. You could load the trained VGG-16 weights or you could load the weights of a trained model. If you want to reproduce the original SSD training, load the pre-trained VGG-16 weights. In any case, you need to set the path to the weights file you want to load on your local machine. Download links to all the trained weights are provided in the [README](https://github.com/pierluigiferrari/ssd_keras/blob/master/README.md) of this repository.
+# 3. Finally, it compiles the model for the training. In order to do so, we're defining an optimizer (Adam) and a loss function (SSDLoss) to be passed to the `compile()` method.
+# 
+# Normally, the optimizer of choice would be Adam (commented out below), but since the original implementation uses plain SGD with momentum, we'll do the same in order to reproduce the original training. Adam is generally the superior optimizer, so if your goal is not to have everything exactly as in the original training, feel free to switch to Adam. You might need to adjust the learning rate scheduler below slightly in case you use Adam.
+# 
+# Note that the learning rate that is being set here doesn't matter, because further below we'll pass a learning rate scheduler to the training function, which will overwrite any learning rate set here, i.e. what matters are the learning rates that are defined by the learning rate scheduler.
+# 
+# `SSDLoss` is a custom Keras loss function that implements the multi-task that consists of a log loss for classification and a smooth L1 loss for localization. `neg_pos_ratio` and `alpha` are set as in the paper.
+
+# In[7]:
+
+
+# 1: Build the Keras model.
 
 model = ssd_300(image_size=(img_height, img_width, img_channels),
                 n_classes=n_classes,
@@ -72,9 +128,13 @@ model = ssd_300(image_size=(img_height, img_width, img_channels),
 # 2: Load some weights into the model.
 
 # TODO: Set the path to the weights you want to load.
-weights_path = 'VOC_coco_SSD_Belga_Relabelled.h5'
+weights_path = 'VGG_coco_SSD_Logos.h5'
 
 model.load_weights(weights_path, by_name=True)
+
+# 3: Instantiate an optimizer and the SSD loss function and compile the model.
+#    If you want to follow the original Caffe implementation, use the preset SGD
+#    optimizer, otherwise I'd recommend the commented-out Adam optimizer.
 
 # adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
 sgd = SGD(lr=0.001, momentum=0.9, decay=0.0, nesterov=False)
@@ -82,6 +142,56 @@ sgd = SGD(lr=0.001, momentum=0.9, decay=0.0, nesterov=False)
 ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
 
 model.compile(optimizer=sgd, loss=ssd_loss.compute_loss)
+
+
+# ### 2.2 Load a previously created model
+# 
+# If you have previously created and saved a model and would now like to load it, execute the next code cell. The only thing you need to do here is to set the path to the saved model HDF5 file that you would like to load.
+# 
+# The SSD model contains custom objects: Neither the loss function nor the anchor box or L2-normalization layer types are contained in the Keras core library, so we need to provide them to the model loader.
+# 
+# This next code cell assumes that you want to load a model that was created in 'training' mode. If you want to load a model that was created in 'inference' or 'inference_fast' mode, you'll have to add the `DecodeDetections` or `DecodeDetectionsFast` layer type to the `custom_objects` dictionary below.
+
+# In[6]:
+
+
+# # TODO: Set the path to the `.h5` file of the model to be loaded.
+# model_path = 'ssd300_belgas_epoch-01_loss-17.2458_val_loss-10.3117.h5'
+
+# # We need to create an SSDLoss object in order to pass that to the model loader.
+# ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
+
+# K.clear_session() # Clear previous models from memory.
+
+# model = load_model(model_path, custom_objects={'AnchorBoxes': AnchorBoxes,
+#                                                'L2Normalization': L2Normalization,
+#                                                'compute_loss': ssd_loss.compute_loss})
+
+
+# ## 3. Set up the data generators for the training
+# 
+# The code cells below set up the data generators for the training and validation datasets to train the model. The settings below reproduce the original SSD training on Pascal VOC 2007 `trainval` plus 2012 `trainval` and validation on Pascal VOC 2007 `test`.
+# 
+# The only thing you need to change here are the filepaths to the datasets on your local machine. Note that parsing the labels from the XML annotations files can take a while.
+# 
+# Note that the generator provides two options to speed up the training. By default, it loads the individual images for a batch from disk. This has two disadvantages. First, for compressed image formats like JPG, this is a huge computational waste, because every image needs to be decompressed again and again every time it is being loaded. Second, the images on disk are likely not stored in a contiguous block of memory, which may also slow down the loading process. The first option that `DataGenerator` provides to deal with this is to load the entire dataset into memory, which reduces the access time for any image to a negligible amount, but of course this is only an option if you have enough free memory to hold the whole dataset. As a second option, `DataGenerator` provides the possibility to convert the dataset into a single HDF5 file. This HDF5 file stores the images as uncompressed arrays in a contiguous block of memory, which dramatically speeds up the loading time. It's not as good as having the images in memory, but it's a lot better than the default option of loading them from their compressed JPG state every time they are needed. Of course such an HDF5 dataset may require significantly more disk space than the compressed images (around 9 GB total for Pascal VOC 2007 `trainval` plus 2012 `trainval` and another 2.6 GB for 2007 `test`). You can later load these HDF5 datasets directly in the constructor.
+# 
+# The original SSD implementation uses a batch size of 32 for the training. In case you run into GPU memory issues, reduce the batch size accordingly. You need at least 7 GB of free GPU memory to train an SSD300 with 20 object classes with a batch size of 32.
+# 
+# The `DataGenerator` itself is fairly generic. I doesn't contain any data augmentation or bounding box encoding logic. Instead, you pass a list of image transformations and an encoder for the bounding boxes in the `transformations` and `label_encoder` arguments of the data generator's `generate()` method, and the data generator will then apply those given transformations and the encoding to the data. Everything here is preset already, but if you'd like to learn more about the data generator and its data augmentation capabilities, take a look at the detailed tutorial in [this](https://github.com/pierluigiferrari/data_generator_object_detection_2d) repository.
+# 
+# The data augmentation settings defined further down reproduce the data augmentation pipeline of the original SSD training. The training generator receives an object `ssd_data_augmentation`, which is a transformation object that is itself composed of a whole chain of transformations that replicate the data augmentation procedure used to train the original Caffe implementation. The validation generator receives an object `resize`, which simply resizes the input images.
+# 
+# An `SSDInputEncoder` object, `ssd_input_encoder`, is passed to both the training and validation generators. As explained above, it matches the ground truth labels to the model's anchor boxes and encodes the box coordinates into the format that the model needs.
+# 
+# In order to train the model on a dataset other than Pascal VOC, either choose `DataGenerator`'s appropriate parser method that corresponds to your data format, or, if `DataGenerator` does not provide a suitable parser for your data format, you can write an additional parser and add it. Out of the box, `DataGenerator` can handle datasets that use the Pascal VOC format (use `parse_xml()`), the MS COCO format (use `parse_json()`) and a wide range of CSV formats (use `parse_csv()`).
+
+# In[7]:
+
+
+# 1: Instantiate two `DataGenerator` objects: One for training, one for validation.
+
+# Optional: If you have enough memory, consider loading the images into memory for the reasons explained above.
 
 train_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=None)
 val_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=None)
@@ -91,71 +201,38 @@ val_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=Non
 # TODO: Set the paths to the datasets here.
 
 # The directories that contain the images.
-images_dir = '../datasets/images'
-
-# The directories that contain the annotations.
-labels_file_train = '../datasets/belgas_relabelled.csv'
-labels_file_test = '../datasets/belgas_relabelled_test.csv'
+logos_images_dir = '../datasets/LogosInTheWild-v2/LogosClean/voc_format'
+logos_annotations_dir      = '../datasets/LogosInTheWild-v2/LogosClean/voc_format'
+logos_filenames = '../datasets/LogosInTheWild-v2/LogosClean/commonformat/ImageSets/data2.txt'
 
 # The XML parser needs to now what object class names to look for and in which order to map them to integers.
-classes = ['Adidas',
- 'Adidas-text',
- 'Airness',
- 'BFGoodrich',
- 'Base',
- 'Bik',
- 'Bouigues',
- 'Bridgestone',
- 'Bridgestone-text',
- 'Carglass',
- 'Citroen',
- 'Citroen-text',
- 'CocaCola',
- 'Cofidis',
- 'Dexia',
- 'ELeclerc',
- 'Ferrari',
- 'Gucci',
- 'Kia',
- 'Mercedes',
- 'Nike',
- 'Peugeot',
- 'Puma',
- 'Puma-text',
- 'Quick',
- 'Reebok',
- 'Roche',
- 'SNCF',
- 'Shell',
- 'Standard_Liege',
- 'StellaArtois',
- 'TNT',
- 'Total',
- 'US_President',
- 'Umbro',
- 'VRT',
- 'Veolia'] # Just so we can print class names onto the image instead of IDs
-
-train_dataset.parse_csv(images_dir,labels_file_train,['image_name','xmin','xmax','ymin','ymax','class_id'])
-val_dataset.parse_csv(images_dir,labels_file_test,['image_name','xmin','xmax','ymin','ymax','class_id'])
-
+classes = np.loadtxt('../datasets/LogosInTheWild-v2/LogosClean/brands.txt',
+                     dtype=str, delimiter='|').tolist()
+train_dataset.parse_xml(images_dirs=[logos_images_dir],
+                        image_set_filenames=[logos_filenames],
+                        annotations_dirs=[logos_annotations_dir],
+                        classes=classes,
+                        include_classes='all',
+                        exclude_truncated=False,
+                        exclude_difficult=False,
+                        ret=False)
 # Optional: Convert the dataset into an HDF5 dataset. This will require more disk space, but will
 # speed up the training. Doing this is not relevant in case you activated the `load_images_into_memory`
 # option in the constructor, because in that cas the images are in memory already anyway. If you don't
 # want to create HDF5 datasets, comment out the subsequent two function calls.
 
-train_dataset.create_hdf5_dataset(file_path='../datasets/belgas_relabelled_train_dataset.h5',
-                                  resize=False,
-                                  variable_image_size=True,
-                                  verbose=True)
+# train_dataset.create_hdf5_dataset(file_path='../datasets/logos_train_dataset.h5',
+#                                   resize=False,
+#                                   variable_image_size=True,
+#                                   verbose=True)
+#
+# val_dataset.create_hdf5_dataset(file_path='../datasets/logos_val_dataset.h5',
+#                                 resize=False,
+#                                 variable_image_size=True,
+#                                 verbose=True)
 
-val_dataset.create_hdf5_dataset(file_path='../datasets/belgas_relabelled_val_dataset.h5',
-                                resize=False,
-                                variable_image_size=True,
-                                verbose=True)
 
-
-# In[6]:
+# In[8]:
 
 
 # 3: Set the batch size.
@@ -226,29 +303,44 @@ print("Number of images in the training dataset:\t{:>6}".format(train_dataset_si
 print("Number of images in the validation dataset:\t{:>6}".format(val_dataset_size))
 
 
+# ## 4. Set the remaining training parameters
+# 
+# We've already chosen an optimizer and set the batch size above, now let's set the remaining training parameters. I'll set one epoch to consist of 1,000 training steps. The next code cell defines a learning rate schedule that replicates the learning rate schedule of the original Caffe implementation for the training of the SSD300 Pascal VOC "07+12" model. That model was trained for 120,000 steps with a learning rate of 0.001 for the first 80,000 steps, 0.0001 for the next 20,000 steps, and 0.00001 for the last 20,000 steps. If you're training on a different dataset, define the learning rate schedule however you see fit.
+# 
+# I'll set only a few essential Keras callbacks below, feel free to add more callbacks if you want TensorBoard summaries or whatever. We obviously need the learning rate scheduler and we want to save the best models during the training. It also makes sense to continuously stream our training history to a CSV log file after every epoch, because if we didn't do that, in case the training terminates with an exception at some point or if the kernel of this Jupyter notebook dies for some reason or anything like that happens, we would lose the entire history for the trained epochs. Finally, we'll also add a callback that makes sure that the training terminates if the loss becomes `NaN`. Depending on the optimizer you use, it can happen that the loss becomes `NaN` during the first iterations of the training. In later iterations it's less of a risk. For example, I've never seen a `NaN` loss when I trained SSD using an Adam optimizer, but I've seen a `NaN` loss a couple of times during the very first couple of hundred training steps of training a new model when I used an SGD optimizer.
+
+# In[9]:
+
+
+# Define a learning rate schedule.
+
 def lr_schedule(epoch):
-    if epoch < 40:
-        return 0.0001
-    else:
-        return 0.00005
+    return 0.0001
+    if epoch == 0: # this is so the first checkpoint shows pre-training loss
+        return 0.0
+    elif epoch < 18:
+        return 0.0005
+    elif epoch < 30:
+        return 0.0002
+    return 0.0001
 
 
-# In[8]:
+# In[10]:
 
 
 # Define model callbacks.
 
 # TODO: Set the filepath under which you want to save the model.
-model_checkpoint = ModelCheckpoint(filepath='./models/belgas_relabelled_sgd/epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
+model_checkpoint = ModelCheckpoint(filepath='./models/logos_sgd/epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
                                    monitor='val_loss',
                                    verbose=1,
                                    save_best_only=True,
                                    save_weights_only=False,
                                    mode='auto',
-                                   period=49)
+                                   period=3)
 #model_checkpoint.best = 
 
-csv_logger = CSVLogger(filename='belgas_relabelled_sgd_training_log.csv',
+csv_logger = CSVLogger(filename='./models/logos_sgd_training_log.csv',
                        separator=',',
                        append=True)
 
@@ -272,21 +364,23 @@ callbacks = [model_checkpoint,
 # 2. In order for the learning rate scheduler callback above to work properly, `fit_generator()` needs to know which epoch we're in, otherwise it will start with epoch 0 every time you resume the training. Set `initial_epoch` to be the next epoch of your training. Note that this parameter is zero-based, i.e. the first epoch is epoch 0. If you had trained for 10 epochs previously and now you'd want to resume the training from there, you'd set `initial_epoch = 10` (since epoch 10 is the eleventh epoch). Furthermore, set `final_epoch` to the last epoch you want to run. To stick with the previous example, if you had trained for 10 epochs previously and now you'd want to train for another 10 epochs, you'd set `initial_epoch = 10` and `final_epoch = 20`.
 # 3. In order for the model checkpoint callback above to work correctly after a kernel restart, set `model_checkpoint.best` to the best validation loss from the previous training. If you don't do this and a new `ModelCheckpoint` object is created after a kernel restart, that object obviously won't know what the last best validation loss was, so it will always save the weights of the first epoch of your new training and record that loss as its new best loss. This isn't super-important, I just wanted to mention it.
 
-# In[9]:
+# In[11]:
 
 
 # If you're resuming a previous training, set `initial_epoch` and `final_epoch` accordingly.
-initial_epoch   = 40
-final_epoch     = 100
+initial_epoch   = 0
+final_epoch     = 30
 steps_per_epoch = 100
+
 
 history = model.fit_generator(generator=train_generator,
                               steps_per_epoch=steps_per_epoch,
                               epochs=final_epoch,
                               callbacks=callbacks,
-                              validation_data=val_generator,
-                              validation_steps=ceil(val_dataset_size/batch_size),
-                              initial_epoch=initial_epoch)
+                              validation_data=train_generator,
+                              validation_steps=ceil(train_dataset_size/batch_size),
+                              initial_epoch=initial_epoch,
+                              use_multiprocessing=True)
 
 
 # ## 6. Make predictions
@@ -295,12 +389,12 @@ history = model.fit_generator(generator=train_generator,
 # 
 # You can set the `shuffle` option to `False` if you would like to check the model's progress on the same image(s) over the course of the training.
 
-# In[10]:
+# In[40]:
 
 
 # # # 1: Set the generator for the predictions.
 
-# predict_generator = val_dataset.generate(batch_size=1,
+# predict_generator = val_dataset.generate(batch_size=100,
 #                                          shuffle=True,
 #                                          transformations=[convert_to_3_channels,
 #                                                           resize],
@@ -313,7 +407,7 @@ history = model.fit_generator(generator=train_generator,
 #                                          keep_images_without_gt=False)
 
 
-# In[47]:
+# In[43]:
 
 
 # # # 2: Generate samples.
@@ -327,39 +421,26 @@ history = model.fit_generator(generator=train_generator,
 # print("Ground truth boxes:\n")
 # print(np.array(batch_original_labels[i]))
 
-
-# In[48]:
-
-
 # # 3: Make predictions.
 
 # y_pred = model.predict(batch_images)
 # print(y_pred)
 
-
-# Now let's decode the raw predictions in `y_pred`.
-# 
-# Had we created the model in 'inference' or 'inference_fast' mode, then the model's final layer would be a `DecodeDetections` layer and `y_pred` would already contain the decoded predictions, but since we created the model in 'training' mode, the model outputs raw predictions that still need to be decoded and filtered. This is what the `decode_detections()` function is for. It does exactly what the `DecodeDetections` layer would do, but using Numpy instead of TensorFlow (i.e. on the CPU instead of the GPU).
-# 
-# `decode_detections()` with default argument values follows the procedure of the original SSD implementation: First, a very low confidence threshold of 0.01 is applied to filter out the majority of the predicted boxes, then greedy non-maximum suppression is performed per class with an intersection-over-union threshold of 0.45, and out of what is left after that, the top 200 highest confidence boxes are returned. Those settings are for precision-recall scoring purposes though. In order to get some usable final predictions, we'll set the confidence threshold much higher, e.g. to 0.5, since we're only interested in the very confident predictions.
-
-# In[49]:
-
-
 # # 4: Decode the raw predictions in `y_pred`.
 
 # y_pred_decoded = decode_detections(y_pred,
-#                                    confidence_thresh=0.3,
+#                                    confidence_thresh=0.2,
 #                                    iou_threshold=0.4,
 #                                    top_k=200,
 #                                    normalize_coords=normalize_coords,
 #                                    img_height=img_height,
 #                                    img_width=img_width)
+# print(y_pred_decoded)
 
 
 # We made the predictions on the resized images, but we'd like to visualize the outcome on the original input images, so we'll convert the coordinates accordingly. Don't worry about that opaque `apply_inverse_transforms()` function below, in this simple case it just aplies `(* original_image_size / resized_image_size)` to the box coordinates.
 
-# In[50]:
+# In[52]:
 
 
 # # 5: Convert the predictions for the original image.
@@ -369,12 +450,15 @@ history = model.fit_generator(generator=train_generator,
 # np.set_printoptions(precision=2, suppress=True, linewidth=90)
 # print("Predicted boxes:\n")
 # print('   class   conf xmin   ymin   xmax   ymax')
-# print(y_pred_decoded_inv[i])
+# while y_pred_decoded_inv[i].size == 0:
+#     i+=1
+    
+# i
 
 
 # Finally, let's draw the predicted boxes onto the image. Each predicted box says its confidence next to the category name. The ground truth boxes are also drawn onto the image in green for comparison.
 
-# In[51]:
+# In[53]:
 
 
 # # 5: Draw the predicted boxes onto the image

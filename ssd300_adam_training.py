@@ -1,11 +1,12 @@
 
+
 from keras import backend as K
 from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
 
 K.clear_session()
 config = tf.ConfigProto(allow_soft_placement=True)
-config.gpu_options.per_process_gpu_memory_fraction = 0.25
+config.gpu_options.per_process_gpu_memory_fraction = 0.4
 sess = tf.Session(config=config)
 K.set_session(sess)
 
@@ -32,6 +33,7 @@ from data_generator.object_detection_2d_photometric_ops import ConvertTo3Channel
 from data_generator.data_augmentation_chain_original_ssd import SSDDataAugmentation
 from data_generator.object_detection_2d_misc_utils import apply_inverse_transforms
 
+
 img_height = 300 # Height of the model input images
 img_width = 300 # Width of the model input images
 img_channels = 3 # Number of color channels of the model input images
@@ -54,6 +56,7 @@ clip_boxes = False # Whether or not to clip the anchor boxes to lie entirely wit
 variances = [0.1, 0.1, 0.2, 0.2] # The variances by which the encoded target coordinates are divided as in the original implementation
 normalize_coords = True
 
+
 model = ssd_300(image_size=(img_height, img_width, img_channels),
                 n_classes=n_classes,
                 mode='training',
@@ -69,113 +72,58 @@ model = ssd_300(image_size=(img_height, img_width, img_channels),
                 subtract_mean=mean_color,
                 swap_channels=swap_channels)
 
-# 2: Load some weights into the model.
 
-# TODO: Set the path to the weights you want to load.
 weights_path = 'VOC_coco_SSD_Belga_Relabelled.h5'
 
 model.load_weights(weights_path, by_name=True)
 
-# adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-sgd = SGD(lr=0.001, momentum=0.9, decay=0.0, nesterov=False)
+adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
+# sgd = SGD(lr=0.001, momentum=0.9, decay=0.0, nesterov=False)
 
 ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
 
-model.compile(optimizer=sgd, loss=ssd_loss.compute_loss)
+model.compile(optimizer=adam, loss=ssd_loss.compute_loss)
+
 
 train_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=None)
 val_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=None)
 
-# 2: Parse the image and label lists for the training and validation datasets. This can take a while.
-
-# TODO: Set the paths to the datasets here.
-
-# The directories that contain the images.
 images_dir = '../datasets/images'
 
-# The directories that contain the annotations.
 labels_file_train = '../datasets/belgas_relabelled.csv'
 labels_file_test = '../datasets/belgas_relabelled_test.csv'
 
-# The XML parser needs to now what object class names to look for and in which order to map them to integers.
 classes = ['Adidas',
- 'Adidas-text',
- 'Airness',
- 'BFGoodrich',
  'Base',
- 'Bik',
- 'Bouigues',
- 'Bridgestone',
- 'Bridgestone-text',
- 'Carglass',
- 'Citroen',
  'Citroen-text',
- 'CocaCola',
- 'Cofidis',
  'Dexia',
- 'ELeclerc',
- 'Ferrari',
- 'Gucci',
  'Kia',
- 'Mercedes',
  'Nike',
- 'Peugeot',
  'Puma',
- 'Puma-text',
- 'Quick',
- 'Reebok',
- 'Roche',
- 'SNCF',
  'Shell',
- 'Standard_Liege',
- 'StellaArtois',
  'TNT',
- 'Total',
- 'US_President',
- 'Umbro',
- 'VRT',
- 'Veolia'] # Just so we can print class names onto the image instead of IDs
-
+ 'Umbro'] # Just so we can print class names onto the image instead of IDs
 train_dataset.parse_csv(images_dir,labels_file_train,['image_name','xmin','xmax','ymin','ymax','class_id'])
 val_dataset.parse_csv(images_dir,labels_file_test,['image_name','xmin','xmax','ymin','ymax','class_id'])
 
-# Optional: Convert the dataset into an HDF5 dataset. This will require more disk space, but will
-# speed up the training. Doing this is not relevant in case you activated the `load_images_into_memory`
-# option in the constructor, because in that cas the images are in memory already anyway. If you don't
-# want to create HDF5 datasets, comment out the subsequent two function calls.
+# train_dataset.create_hdf5_dataset(file_path='../datasets/belgas_relabelled_train_dataset.h5',
+#                                   resize=False,
+#                                   variable_image_size=True,
+#                                   verbose=True)
+#
+# val_dataset.create_hdf5_dataset(file_path='../datasets/belgas_relabelled_val_dataset.h5',
+#                                 resize=False,
+#                                 variable_image_size=True,
+#                                 verbose=True)
 
-train_dataset.create_hdf5_dataset(file_path='../datasets/belgas_relabelled_train_dataset.h5',
-                                  resize=False,
-                                  variable_image_size=True,
-                                  verbose=True)
-
-val_dataset.create_hdf5_dataset(file_path='../datasets/belgas_relabelled_val_dataset.h5',
-                                resize=False,
-                                variable_image_size=True,
-                                verbose=True)
-
-
-# In[6]:
-
-
-# 3: Set the batch size.
 
 batch_size = 32 # Change the batch size if you like, or if you run into GPU memory issues.
 
-# 4: Set the image transformations for pre-processing and data augmentation options.
-
-# For the training generator:
 ssd_data_augmentation = SSDDataAugmentation(img_height=img_height,
                                             img_width=img_width,
                                             background=mean_color)
-
-# For the validation generator:
 convert_to_3_channels = ConvertTo3Channels()
 resize = Resize(height=img_height, width=img_width)
-
-# 5: Instantiate an encoder that can encode ground truth labels into the format needed by the SSD loss function.
-
-# The encoder constructor needs the spatial dimensions of the model's predictor layers to create the anchor boxes.
 predictor_sizes = [model.get_layer('conv4_3_norm_mbox_conf').output_shape[1:3],
                    model.get_layer('fc7_mbox_conf').output_shape[1:3],
                    model.get_layer('conv6_2_mbox_conf').output_shape[1:3],
@@ -198,8 +146,6 @@ ssd_input_encoder = SSDInputEncoder(img_height=img_height,
                                     pos_iou_threshold=0.5,
                                     neg_iou_limit=0.5,
                                     normalize_coords=normalize_coords)
-
-# 6: Create the generator handles that will be passed to Keras' `fit_generator()` function.
 
 train_generator = train_dataset.generate(batch_size=batch_size,
                                          shuffle=True,
@@ -227,10 +173,11 @@ print("Number of images in the validation dataset:\t{:>6}".format(val_dataset_si
 
 
 def lr_schedule(epoch):
-    if epoch < 40:
+    return 0.00001
+    if epoch < 8:
         return 0.0001
     else:
-        return 0.00005
+        return 0.00001
 
 
 # In[8]:
@@ -239,16 +186,16 @@ def lr_schedule(epoch):
 # Define model callbacks.
 
 # TODO: Set the filepath under which you want to save the model.
-model_checkpoint = ModelCheckpoint(filepath='./models/belgas_relabelled_sgd/epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
+model_checkpoint = ModelCheckpoint(filepath='./models/belgas_relabelled_adam/epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
                                    monitor='val_loss',
                                    verbose=1,
                                    save_best_only=True,
                                    save_weights_only=False,
                                    mode='auto',
-                                   period=49)
+                                   period=10)
 #model_checkpoint.best = 
 
-csv_logger = CSVLogger(filename='belgas_relabelled_sgd_training_log.csv',
+csv_logger = CSVLogger(filename='belgas_relabelled_adam_training_log_3.csv',
                        separator=',',
                        append=True)
 
@@ -263,21 +210,8 @@ callbacks = [model_checkpoint,
              terminate_on_nan]
 
 
-# ## 5. Train
-
-# In order to reproduce the training of the "07+12" model mentioned above, at 1,000 training steps per epoch you'd have to train for 120 epochs. That is going to take really long though, so you might not want to do all 120 epochs in one go and instead train only for a few epochs at a time. You can find a summary of a full training [here](https://github.com/pierluigiferrari/ssd_keras/blob/master/training_summaries/ssd300_pascal_07%2B12_training_summary.md).
-# 
-# In order to only run a partial training and resume smoothly later on, there are a few things you should note:
-# 1. Always load the full model if you can, rather than building a new model and loading previously saved weights into it. Optimizers like SGD or Adam keep running averages of past gradient moments internally. If you always save and load full models when resuming a training, then the state of the optimizer is maintained and the training picks up exactly where it left off. If you build a new model and load weights into it, the optimizer is being initialized from scratch, which, especially in the case of Adam, leads to small but unnecessary setbacks every time you resume the training with previously saved weights.
-# 2. In order for the learning rate scheduler callback above to work properly, `fit_generator()` needs to know which epoch we're in, otherwise it will start with epoch 0 every time you resume the training. Set `initial_epoch` to be the next epoch of your training. Note that this parameter is zero-based, i.e. the first epoch is epoch 0. If you had trained for 10 epochs previously and now you'd want to resume the training from there, you'd set `initial_epoch = 10` (since epoch 10 is the eleventh epoch). Furthermore, set `final_epoch` to the last epoch you want to run. To stick with the previous example, if you had trained for 10 epochs previously and now you'd want to train for another 10 epochs, you'd set `initial_epoch = 10` and `final_epoch = 20`.
-# 3. In order for the model checkpoint callback above to work correctly after a kernel restart, set `model_checkpoint.best` to the best validation loss from the previous training. If you don't do this and a new `ModelCheckpoint` object is created after a kernel restart, that object obviously won't know what the last best validation loss was, so it will always save the weights of the first epoch of your new training and record that loss as its new best loss. This isn't super-important, I just wanted to mention it.
-
-# In[9]:
-
-
-# If you're resuming a previous training, set `initial_epoch` and `final_epoch` accordingly.
-initial_epoch   = 40
-final_epoch     = 100
+initial_epoch   = 0
+final_epoch     = 200
 steps_per_epoch = 100
 
 history = model.fit_generator(generator=train_generator,
