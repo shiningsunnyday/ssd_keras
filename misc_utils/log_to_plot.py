@@ -8,6 +8,7 @@ parser.add_argument("--input",required=True)
 parser.add_argument("--output",required=True)
 parser.add_argument("--title",required=True)
 parser.add_argument("--first",default=-1)
+
 flags = parser.parse_args()
 title = flags.title
 
@@ -19,9 +20,12 @@ if int(flags.first) < 0:
 else:
     summary = summary.iloc[int(flags.first):, :]
 
-plt.plot(summary.epoch, summary.loss, label='training loss')
-plt.plot(summary.epoch, summary.val_loss, label='val loss')
-plt.title(title)
-plt.xlabel('Epoch number')
-plt.ylabel('SSD Loss')
-plt.savefig(flags.output)
+fig = plt.figure()
+ax = fig.add_subplot()
+
+ax.plot(summary.epoch, summary.loss, 'b-', label='training loss')
+ax.plot(summary.epoch, summary.val_loss, 'b--', label='val loss')
+ax.legend()
+ax.set(xlabel='Epoch number',ylabel='SSD Loss',title=title)
+
+fig.savefig(flags.output)

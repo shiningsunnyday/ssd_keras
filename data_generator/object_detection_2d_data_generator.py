@@ -1070,7 +1070,7 @@ class DataGenerator:
                     for transform in transformations:
 
                         if not (self.labels is None):
-
+                            
                             if ('inverse_transform' in returns) and ('return_inverter' in inspect.signature(transform).parameters):
                                 batch_X[i], batch_y[i], inverse_transform = transform(batch_X[i], batch_y[i], return_inverter=True)
                                 inverse_transforms.append(inverse_transform)

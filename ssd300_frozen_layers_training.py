@@ -4,9 +4,24 @@ from keras import backend as K
 from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
 
+import argparse
+parser = argparse.ArgumentParser()
+parser.add_argument("--memory_frac",required=True)
+parser.add_argument("--optimizer",required=True)
+parser.add_argument("--model_file",required=True)
+parser.add_argument("--saved_models",required=True)
+parser.add_argument("--save_period",required=True)
+parser.add_argument("--training_summary",required=True)
+parser.add_argument("--start_freeze",required=True)
+parser.add_argument("--end_freeze",required=True)
+parser.add_argument("--initial_epoch",required=True)
+parser.add_argument("--end_epoch",required=True)
+parser.add_argument("--fixed_lr")
+flags = parser.parse_args() # make sure to tune learning schedule!
+
 K.clear_session()
 config = tf.ConfigProto(allow_soft_placement=True)
-config.gpu_options.per_process_gpu_memory_fraction = 0.4
+config.gpu_options.per_process_gpu_memory_fraction = float(flags.memory_frac)
 sess = tf.Session(config=config)
 K.set_session(sess)
 
@@ -73,18 +88,19 @@ model = ssd_300(image_size=(img_height, img_width, img_channels),
                 swap_channels=swap_channels)
 
 
-weights_path = 'VOC_coco_SSD_Belga_Relabelled.h5'
+weights_path = flags.model_file
 
 model.load_weights(weights_path, by_name=True)
 
 adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-# sgd = SGD(lr=0.001, momentum=0.9, decay=0.0, nesterov=False)
+sgd = SGD(lr=0.001, momentum=0.9, decay=0.0, nesterov=False)
 
 ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
-freeze_range = range(4,18) # layers to freeze, currently first four blocks
+freeze_range = range(int(flags.start_freeze),int(flags.end_freeze)) # layers to freeze, currently first four blocks
 for i in freeze_range:
     model.layers[i].trainable = False
-model.compile(optimizer=adam, loss=ssd_loss.compute_loss)
+optimizer = adam if flags.optimizer=="adam" else sgd
+model.compile(optimizer=optimizer, loss=ssd_loss.compute_loss)
 
 train_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=None)
 val_dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=None)
@@ -174,20 +190,23 @@ print("Number of images in the validation dataset:\t{:>6}".format(val_dataset_si
 
 
 def lr_schedule(epoch):
-    return 0.0001
-    if epoch < 40:
+    if flags.fixed_lr is not None:
+        return float(flags.fixed_lr)
+    if epoch < 15:
+        return 0.001
+    elif epoch < 40:
         return 0.0001
     else:
-        return 0.00005
+        return 0.00001
 
-model_checkpoint = ModelCheckpoint(filepath='./models/belgas_relabelled_adam_frozen/epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
+model_checkpoint = ModelCheckpoint(filepath=flags.saved_models+'/best_redo.h5',
                                    monitor='val_loss',
                                    verbose=1,
                                    save_best_only=True,
                                    save_weights_only=False,
                                    mode='auto',
-                                   period=10)
-csv_logger = CSVLogger(filename='belgas_relabelled_adam_frozen_training_log.csv',
+                                   period=int(flags.save_period))
+csv_logger = CSVLogger(filename=flags.training_summary,
                        separator=',',
                        append=True)
 
@@ -202,11 +221,13 @@ callbacks = [model_checkpoint,
              terminate_on_nan]
 
 
-initial_epoch   = 0
-final_epoch     = 100
+initial_epoch   = int(flags.initial_epoch)
+final_epoch     = int(flags.end_epoch)
 steps_per_epoch = 100
 
 history = model.fit_generator(generator=train_generator,
+                              use_multiprocessing=True,
+                              workers=40,
                               steps_per_epoch=steps_per_epoch,
                               epochs=final_epoch,
                               callbacks=callbacks,

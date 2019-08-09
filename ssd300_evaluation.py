@@ -19,6 +19,7 @@ from eval_utils.average_precision_evaluator import Evaluator
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_file",required=True)
+parser.add_argument("--train",default=False)
 flags = parser.parse_args()
 
 # In[2]:
@@ -61,9 +62,10 @@ model = ssd_300(image_size=(img_height, img_width, 3),
 weights_path = flags.model_file
 
 model.load_weights(weights_path, by_name=True)
+sgd = SGD(lr=0.001, momentum=0.9, decay=0.0, nesterov=False)
 adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
 ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
-model.compile(optimizer=adam, loss=ssd_loss.compute_loss)
+model.compile(optimizer=sgd, loss=ssd_loss.compute_loss)
 
 
 # In[4]:
@@ -71,7 +73,7 @@ model.compile(optimizer=adam, loss=ssd_loss.compute_loss)
 
 dataset = DataGenerator()
 images_dir = '../datasets/images'
-labels_file_test = '../datasets/belgas_relabelled_test.csv'
+labels_file = '../datasets/belgas_relabelled.csv' if bool(flags.train) else '../datasets/belgas_relabelled_test.csv'
 classes = ['Adidas',
  'Base',
  'Citroen-text',
@@ -82,7 +84,7 @@ classes = ['Adidas',
  'Shell',
  'TNT',
  'Umbro'] # Just so we can print class names onto the image instead of IDs
-dataset.parse_csv(images_dir,labels_file_test,['image_name','xmin','xmax','ymin','ymax','class_id'])
+dataset.parse_csv(images_dir,labels_file,['image_name','xmin','xmax','ymin','ymax','class_id'])
 
 
 # In[ ]:
@@ -120,57 +122,3 @@ for i in range(1, len(average_precisions)):
 print()
 print("{:<14}{:<6}{}".format('','mAP', round(mean_average_precision, 3)))
 
-
-# In[ ]:
-
-#
-# m = max((n_classes + 1) // 2, 2)
-# n = 2
-#
-# fig, cells = plt.subplots(m, n, figsize=(n*8,m*8))
-# for i in range(m):
-#     for j in range(n):
-#         if n*i+j+1 > n_classes: break
-#         cells[i, j].plot(recalls[n*i+j+1], precisions[n*i+j+1], color='blue', linewidth=1.0)
-#         cells[i, j].set_xlabel('recall', fontsize=14)
-#         cells[i, j].set_ylabel('precision', fontsize=14)
-#         cells[i, j].grid(True)
-#         cells[i, j].set_xticks(np.linspace(0,1,11))
-#         cells[i, j].set_yticks(np.linspace(0,1,11))
-#         cells[i, j].set_title("{}, AP: {:.3f}".format(classes[n*i+j+1], average_precisions[n*i+j+1]), fontsize=16)
-#
-#
-# # In[ ]:
-#
-#
-# evaluator.get_num_gt_per_class(ignore_neutral_boxes=True,
-#                                verbose=False,
-#                                ret=False)
-# evaluator.match_predictions(ignore_neutral_boxes=True,
-#                             matching_iou_threshold=0.5,
-#                             border_pixels='include',
-#                             sorting_algorithm='quicksort',
-#                             verbose=True,
-#                             ret=False)
-# precisions, recalls = evaluator.compute_precision_recall(verbose=True, ret=True)
-# average_precisions = evaluator.compute_average_precisions(mode='integrate',
-#                                                           num_recall_points=11,
-#                                                           verbose=True,
-#                                                           ret=True)
-# mean_average_precision = evaluator.compute_mean_average_precision(ret=True)
-#
-#
-# # In[ ]:
-#
-#
-# for i in range(1, len(average_precisions)):
-#     print("{:<14}{:<6}{}".format(classes[i], 'AP', round(average_precisions[i], 3)))
-# print()
-# print("{:<14}{:<6}{}".format('','mAP', round(mean_average_precision, 3)))
-#
-#
-# # In[ ]:
-#
-#
-#
-#
