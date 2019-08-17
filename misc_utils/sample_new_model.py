@@ -2,13 +2,13 @@ import h5py
 import numpy as np
 import shutil
 
-from misc_utils.tensor_sampling_utils import sample_tensors
+from tensor_sampling_utils import sample_tensors
 import argparse
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--output",required=True)
 parser.add_argument("--num_classes",required=True)
-parser.add_argument("--source",default='VGG_coco_SSD_300x300_iter_400000.h5')
+parser.add_argument("--source",default='../base_models/VGG_coco_SSD_300x300_iter_400000.h5')
 flags = parser.parse_args()
 weights_source_path = flags.source
 weights_destination_path = flags.output
@@ -206,3 +206,4 @@ print("Shape of the '{}' weights:".format(classifier_names[0]))
 print()
 print("kernel:\t", conv4_3_norm_mbox_conf_kernel.shape)
 print("bias:\t", conv4_3_norm_mbox_conf_bias.shape)
+

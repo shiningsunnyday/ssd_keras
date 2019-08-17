@@ -347,6 +347,7 @@ class Evaluator:
         # This is just to make the evaluator compatible both with datasets that do and don't
         # have image IDs.
         if self.data_generator.image_ids is None:
+            pdb.set_trace()
             self.data_generator.image_ids = list(range(self.data_generator.get_dataset_size()))
 
         #############################################################################################
@@ -416,6 +417,7 @@ class Evaluator:
                     xmax = round(box[xmax_pred], 1)
                     ymax = round(box[ymax_pred], 1)
                     prediction = (image_id, confidence, xmin, ymin, xmax, ymax)
+
                     # Append the predicted box to the results list for its class.
                     results[class_id].append(prediction)
 
@@ -627,7 +629,7 @@ class Evaluator:
             # Convert the predictions list for this class into a structured array so that we can sort it by confidence.
 
             # Get the number of characters needed to store the image ID strings in the structured array.
-            num_chars_per_image_id = len(str(predictions[0][0])) + 6 # Keep a few characters buffer in case some image IDs are longer than others.
+            num_chars_per_image_id = len(str(predictions[0][0])) + 40 # Keep a few characters buffer in case some image IDs are longer than others.
             # Create the data type for the structured array.
             preds_data_type = np.dtype([('image_id', 'U{}'.format(num_chars_per_image_id)),
                                         ('confidence', 'f4'),
@@ -656,6 +658,7 @@ class Evaluator:
 
                 prediction = predictions_sorted[i]
                 image_id = prediction['image_id']
+
                 pred_box = np.asarray(list(prediction[['xmin', 'ymin', 'xmax', 'ymax']])) # Convert the structured array element to a regular array.
 
                 # Get the relevant ground truth boxes for this prediction,
