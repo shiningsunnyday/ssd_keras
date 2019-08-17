@@ -4,13 +4,15 @@ from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
 
 import argparse
-parser = argparse.ArgumentParser(
+parser = argparse.ArgumentParser()
 parser.add_argument("--memory_frac",required=True)
 parser.add_argument("--optimizer",required=True)
 parser.add_argument("--model_file",required=True)
 parser.add_argument("--saved_models",required=True)
 parser.add_argument("--save_period",required=True)
 parser.add_argument("--training_summary",required=True)
+parser.add_argument("--start_freeze",required=True)
+parser.add_argument("--end_freeze",required=True)
 parser.add_argument("--initial_epoch",required=True)
 parser.add_argument("--end_epoch",required=True)
 parser.add_argument("--fixed_lr")
@@ -18,7 +20,7 @@ flags = parser.parse_args() # make sure to tune learning schedule!
 
 K.clear_session()
 config = tf.ConfigProto(allow_soft_placement=True)
-config.gpu_options.per_process_gpu_memory_fraction = float(parser.memory_frac)
+config.gpu_options.per_process_gpu_memory_fraction = float(flags.memory_frac)
 sess = tf.Session(config=config)
 K.set_session(sess)
 
@@ -93,6 +95,10 @@ adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
 sgd = SGD(lr=0.001, momentum=0.9, decay=0.0, nesterov=False)
 
 ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
+
+freeze_range = range(int(flags.start_freeze),int(flags.end_freeze)) # layers to freeze, currently first four blocks
+for i in freeze_range:
+    model.layers[i].trainable = False
 optimizer = adam if flags.optimizer=="adam" else sgd
 model.compile(optimizer=optimizer, loss=ssd_loss.compute_loss)
 
@@ -107,43 +113,15 @@ labels_file_test = '../datasets/belgas_relabelled_test.csv'
 
 # The XML parser needs to now what object class names to look for and in which order to map them to integers.
 classes = ['Adidas',
- 'Adidas-text',
- 'Airness',
- 'BFGoodrich',
  'Base',
- 'Bik',
- 'Bouigues',
- 'Bridgestone',
- 'Bridgestone-text',
- 'Carglass',
- 'Citroen',
  'Citroen-text',
- 'CocaCola',
- 'Cofidis',
  'Dexia',
- 'ELeclerc',
- 'Ferrari',
- 'Gucci',
  'Kia',
- 'Mercedes',
  'Nike',
- 'Peugeot',
  'Puma',
- 'Puma-text',
- 'Quick',
- 'Reebok',
- 'Roche',
- 'SNCF',
  'Shell',
- 'Standard_Liege',
- 'StellaArtois',
  'TNT',
- 'Total',
- 'US_President',
- 'Umbro',
- 'VRT',
- 'Veolia'] # Just so we can print class names onto the image instead of IDs
-
+ 'Umbro'] # Just so we can print class names onto the image instead of IDs
 train_dataset.parse_csv(images_dir,labels_file_train,['image_name','xmin','xmax','ymin','ymax','class_id'])
 val_dataset.parse_csv(images_dir,labels_file_test,['image_name','xmin','xmax','ymin','ymax','class_id'])
 
@@ -158,6 +136,7 @@ val_dataset.create_hdf5_dataset(file_path='../datasets/belgas_relabelled_val_dat
                                 variable_image_size=True,
                                 verbose=True)
 
+batch_size = 32 # Change the batch size if you like, or if you run into GPU memory issues.
 
 
 ssd_data_augmentation = SSDDataAugmentation(img_height=img_height,
