@@ -1,0 +1,78 @@
+# coding: utf-8
+folder_path='../../../../datasets/FlickrLogos_47'
+train_path=folder_path+'/train'
+logos_file_list=np.loadtxt(train_path+'/filelist-logosonly.txt',dtype=str)
+import numpy as np
+logos_file_list=np.loadtxt(train_path+'/filelist-logosonly.txt',dtype=str)
+logos_file_list[0]
+logos_file_list=np.array([file.strip('.png') for file in logos_file_list])
+logos_file_list[0]
+logos_file_list=np.loadtxt(train_path+'/filelist-logosonly.txt',dtype=str)
+logos_file_list=np.array([file.strip('.png') for file in logos_file_list])
+for file in logos_file_list:
+    with open(file+'.txt') as f:
+        line = f.readline()
+        print(line)
+        
+for file in logos_file_list:
+    with open(train_path+file+'.txt') as f:
+        line = f.readline()
+        print(line)
+        
+for file in logos_file_list:
+    with open(train_path+file+'.gt_data.txt') as f:
+        line = f.readline()
+        print(line)
+        
+annotations = []
+for file in logos_file_list:
+    with open(train_path+file+'.gt_data.txt') as f:
+        line = f.readline()
+        xmin,ymin,xmax,ymax=line.split()[:4]
+        class_id=line.split()[4]
+        annotations.append([file,xmin,xmax,ymin,ymax,class_id])
+        
+        
+annotations[0]
+logos_file_list[0]
+logos_file_list=np.loadtxt(train_path+'/filelist-logosonly.txt',dtype=str)
+annotations = []
+for file in logos_file_list:
+    with open(train_path+file+'.gt_data.txt') as f:
+        line = f.readline()
+        xmin,ymin,xmax,ymax=line.split()[:4]
+        class_id=line.split()[4]
+        annotations.append([file,xmin,xmax,ymin,ymax,class_id])
+        
+        
+annotations = []
+for file in logos_file_list:
+    with open(train_path+file.strip('.png')+'.gt_data.txt') as f:
+        line = f.readline()
+        xmin,ymin,xmax,ymax=line.split()[:4]
+        class_id=line.split()[4]
+        annotations.append([file,xmin,xmax,ymin,ymax,class_id])
+        
+        
+annotations[0]
+annotations[:,0] = [a.strip('./') for a in annotations[:,0]]
+annotations = np.array(annotations)
+annotations[:,0] = [a.strip('./') for a in annotations[:,0]]
+annotations[0]
+ann_df = pd.DataFrame(annotations)
+import pandas as pd
+ann_df = pd.DataFrame(annotations)
+ann_df.columns=['frame','xmin','xmax','ymin','ymax','class_id']
+ann_df
+ann_df.to_csv('flickr_labels.csv',index=False)
+ann_df['xmin'].astype(int)
+ann_df['xmin']
+ann_df['xmin'] = ann_df['xmin'].astype(int)
+ann_df['xmin']
+ann_df['xmax'] = ann_df['xmax'].astype(int)
+ann_df['ymax'] = ann_df['ymax'].astype(int)
+ann_df['ymin'] = ann_df['ymin'].astype(int)
+ann_df
+ann_df['class_id'] = ann_df['class_id'].astype(int)
+ann_df.to_csv('flickr_labels.csv',index=False)
+%save -r process_flickr 3-43
