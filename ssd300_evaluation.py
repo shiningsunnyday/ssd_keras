@@ -2,7 +2,7 @@
 
 from keras import backend as K
 from keras.models import load_model
-from keras.optimizers import Adam
+from keras.optimizers import SGD
 import numpy as np
 from matplotlib import pyplot as plt
 from matplotlib.pyplot import imread
@@ -13,13 +13,15 @@ from keras_layers.keras_layer_AnchorBoxes import AnchorBoxes
 from keras_layers.keras_layer_DecodeDetections import DecodeDetections
 from keras_layers.keras_layer_DecodeDetectionsFast import DecodeDetectionsFast
 from keras_layers.keras_layer_L2Normalization import L2Normalization
-from data_generator.object_detection_2d_data_generator import DataGenerator
+from data_generator.object_detection_2d_data_generator_custom import DataGenerator
 from eval_utils.average_precision_evaluator import Evaluator
 
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--model_file",required=True)
-parser.add_argument("--train",default=False)
+parser.add_argument("--images_dir",required=True)
+parser.add_argument("--labels_path",required=True)
+parser.add_argument("--classes",required=True)
 flags = parser.parse_args()
 
 # In[2]:
@@ -28,7 +30,7 @@ flags = parser.parse_args()
 # Set a few configuration parameters.
 img_height = 300
 img_width = 300
-n_classes = 9
+n_classes = 30
 model_mode = 'inference'
 
 
@@ -63,7 +65,7 @@ weights_path = flags.model_file
 
 model.load_weights(weights_path, by_name=True)
 sgd = SGD(lr=0.001, momentum=0.9, decay=0.0, nesterov=False)
-adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
+# adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
 ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
 model.compile(optimizer=sgd, loss=ssd_loss.compute_loss)
 
@@ -71,23 +73,21 @@ model.compile(optimizer=sgd, loss=ssd_loss.compute_loss)
 # In[4]:
 
 
-dataset = DataGenerator()
-images_dir = '../datasets/images'
-labels_file = '../datasets/belgas_relabelled.csv' if bool(flags.train) else '../datasets/belgas_relabelled_test.csv'
-classes = ['Adidas',
- 'Base',
- 'Citroen-text',
- 'Dexia',
- 'Kia',
- 'Nike',
- 'Puma',
- 'Shell',
- 'TNT',
- 'Umbro'] # Just so we can print class names onto the image instead of IDs
-dataset.parse_csv(images_dir,labels_file,['image_name','xmin','xmax','ymin','ymax','class_id'])
+dataset = DataGenerator(load_images_into_memory=False, hdf5_dataset_path=None)
 
+# logos_images_dir = '../datasets/LogosInTheWild-v2/LogosClean/voc_format'
+# logos_annotations_dir = '../datasets/LogosInTheWild-v2/LogosClean/voc_format'
+# filenames = '../datasets/LogosInTheWild-v2/LogosClean/commonformat/ImageSets/data2.txt'
+# train_filenames = '../datasets/LogosInTheWild-v2/LogosClean/commonformat/ImageSets/top_only_train_with_neg.txt'
+# test_filenames = '../datasets/LogosInTheWild-v2/LogosClean/commonformat/ImageSets/top_only_test_with_neg.txt'
+#
+# classes = np.loadtxt("../datasets/LogosInTheWild-v2/LogosClean/commonformat/ImageSets/top_classes.txt", dtype=str)
+# classes = np.array([c.lower() for c in classes]).tolist()
+# classes[-1] = 'vw'
 
-# In[ ]:
+classes = np.loadtxt(flags.classes,dtype=str)
+
+dataset.parse_csv(flags.images_dir,flags.labels_path,['image_name','xmin','xmax','ymin','ymax','class_id'])
 
 
 evaluator = Evaluator(model=model,
@@ -113,12 +113,19 @@ results = evaluator(img_height=img_height,
 
 mean_average_precision, average_precisions, precisions, recalls = results
 
+avg_prec_sorted_dic = dict(zip(classes[1:],average_precisions[1:]))
+avg_prec_sorted = sorted(list(avg_prec_sorted_dic.keys()),key=lambda x:avg_prec_sorted_dic[x])
 
 # In[ ]:
 
 
-for i in range(1, len(average_precisions)):
-    print("{:<14}{:<6}{}".format(classes[i], 'AP', round(average_precisions[i], 3)))
+
+for i in range(len(avg_prec_sorted)):
+    print("{:<14}{:<6}{}".format(avg_prec_sorted[i], 'AP', round(avg_prec_sorted_dic[avg_prec_sorted[i]], 3)))
 print()
 print("{:<14}{:<6}{}".format('','mAP', round(mean_average_precision, 3)))
 
+np.savetxt('../datasets/FlickrLogos_47/top_classes.txt',avg_prec_sorted[-10:],fmt='%s')
+
+# sample code
+# python ssd300_evaluation.py --model_file=models/flickr/0_layers_baseline.h5 --images_dir=../datasets/FlickrLogos_47/test --labels_path=../datasets/FlickrLogos_47/test/flickr_test_labels.csv --classes=../datasets/FlickrLogos_47/classes.txt
