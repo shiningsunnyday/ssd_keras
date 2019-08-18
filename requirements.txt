@@ -35,6 +35,7 @@ Markdown==3.1.1
 MarkupSafe==1.1.1
 matplotlib==3.1.1
 mistune==0.8.4
+mock==3.0.5
 nbconvert==5.5.0
 nbformat==4.4.0
 notebook==6.0.0
@@ -64,6 +65,7 @@ six==1.12.0
 sklearn==0.0
 soupsieve==1.9.2
 tensorboard==1.11.0
+tensorflow-estimator==1.14.0
 tensorflow-gpu==1.11.0
 termcolor==1.1.0
 terminado==0.8.2

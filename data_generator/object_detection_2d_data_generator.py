@@ -491,7 +491,10 @@ class DataGenerator:
                     # Parse the data for each object.
                     for obj in objects:
                         class_name = obj.find('name', recursive=False).text
-                        class_id = self.classes.index(class_name)
+                        try:
+                            class_id = self.classes.index(class_name)
+                        except ValueError:
+                            class_id = 0
                         # Check whether this class is supposed to be included in the dataset.
                         if (not self.include_classes == 'all') and (not class_id in self.include_classes): continue
                         pose = obj.find('pose', recursive=False).text
@@ -1067,7 +1070,7 @@ class DataGenerator:
                     for transform in transformations:
 
                         if not (self.labels is None):
-
+                            
                             if ('inverse_transform' in returns) and ('return_inverter' in inspect.signature(transform).parameters):
                                 batch_X[i], batch_y[i], inverse_transform = transform(batch_X[i], batch_y[i], return_inverter=True)
                                 inverse_transforms.append(inverse_transform)

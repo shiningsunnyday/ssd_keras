@@ -1,3 +1,4 @@
+
 from keras import backend as K
 from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
@@ -65,6 +66,7 @@ offsets = [0.5, 0.5, 0.5, 0.5, 0.5, 0.5] # The offsets of the first anchor box c
 clip_boxes = False # Whether or not to clip the anchor boxes to lie entirely within the image boundaries
 variances = [0.1, 0.1, 0.2, 0.2] # The variances by which the encoded target coordinates are divided as in the original implementation
 normalize_coords = True
+
 model = ssd_300(image_size=(img_height, img_width, img_channels),
                 n_classes=n_classes,
                 mode='training',
@@ -229,8 +231,7 @@ def lr_schedule(epoch):
 
 
 
-model_checkpoint = ModelCheckpoint(filepath=flags.saved_models+'/epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
-
+model_checkpoint = ModelCheckpoint(filepath=flags.saved_models+'/best.h5',
                                    monitor='val_loss',
                                    verbose=1,
                                    save_best_only=True,
@@ -256,7 +257,6 @@ initial_epoch   = int(flags.initial_epoch)
 final_epoch     = int(flags.end_epoch)
 steps_per_epoch = 100
 
-
 history = model.fit_generator(generator=train_generator,
                               steps_per_epoch=steps_per_epoch,
                               epochs=final_epoch,
@@ -264,4 +264,3 @@ history = model.fit_generator(generator=train_generator,
                               validation_data=val_generator,
                               validation_steps=ceil(val_dataset_size/batch_size),
                               initial_epoch=initial_epoch)
-
