@@ -10,7 +10,6 @@
 
 # In[3]:
 
- # Clear previous models from memory.
 from keras import backend as K
 from keras.backend.tensorflow_backend import set_session
 import tensorflow as tf
@@ -43,7 +42,6 @@ from data_generator.object_detection_2d_geometric_ops import Resize
 from data_generator.object_detection_2d_photometric_ops import ConvertTo3Channels
 from data_generator.data_augmentation_chain_original_ssd import SSDDataAugmentation
 from data_generator.object_detection_2d_misc_utils import apply_inverse_transforms
-
 
 # get_ipython().run_line_magic('matplotlib', 'inline')
 
@@ -110,6 +108,8 @@ normalize_coords = True
 
 # 1: Build the Keras model.
 
+K.clear_session() # Clear previous models from memory.
+
 model = ssd_300(image_size=(img_height, img_width, img_channels),
                 n_classes=n_classes,
                 mode='training',
@@ -128,7 +128,7 @@ model = ssd_300(image_size=(img_height, img_width, img_channels),
 # 2: Load some weights into the model.
 
 # TODO: Set the path to the weights you want to load.
-weights_path = './models/belgas_sgd/sgd-3-2_epoch-30_loss-7.2753_val_loss-7.3205.h5'
+weights_path = 'VGG_coco_SSD_Belga.h5'
 
 model.load_weights(weights_path, by_name=True)
 
@@ -136,12 +136,12 @@ model.load_weights(weights_path, by_name=True)
 #    If you want to follow the original Caffe implementation, use the preset SGD
 #    optimizer, otherwise I'd recommend the commented-out Adam optimizer.
 
-# adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
-sgd = SGD(lr=0.001, momentum=0.9, decay=0.0, nesterov=False)
+adam = Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
+# sgd = SGD(lr=0.001, momentum=0.9, decay=0.0, nesterov=False)
 
 ssd_loss = SSDLoss(neg_pos_ratio=3, alpha=1.0)
 
-model.compile(optimizer=sgd, loss=ssd_loss.compute_loss)
+model.compile(optimizer=adam, loss=ssd_loss.compute_loss)
 
 
 # ### 2.2 Load a previously created model
@@ -254,15 +254,15 @@ val_dataset.parse_csv(images_dir,labels_file_test,['image_name','xmin','xmax','y
 # option in the constructor, because in that cas the images are in memory already anyway. If you don't
 # want to create HDF5 datasets, comment out the subsequent two function calls.
 
-# train_dataset.create_hdf5_dataset(file_path='../datasets/belgas_train_dataset.h5',
-#                                   resize=False,
-#                                   variable_image_size=True,
-#                                   verbose=True)
-#
-# val_dataset.create_hdf5_dataset(file_path='../datasets/belgas_val_dataset.h5',
-#                                 resize=False,
-#                                 variable_image_size=True,
-#                                 verbose=True)
+train_dataset.create_hdf5_dataset(file_path='../datasets/belgas_train_dataset.h5',
+                                  resize=False,
+                                  variable_image_size=True,
+                                  verbose=True)
+
+val_dataset.create_hdf5_dataset(file_path='../datasets/belgas_val_dataset.h5',
+                                resize=False,
+                                variable_image_size=True,
+                                verbose=True)
 
 
 # In[8]:
@@ -348,13 +348,9 @@ print("Number of images in the validation dataset:\t{:>6}".format(val_dataset_si
 # Define a learning rate schedule.
 
 def lr_schedule(epoch):
-    if epoch == 0: # this is so the first checkpoint shows pre-training loss
+    if epoch == 0:
         return 0.0
-    elif epoch < 18:
-        return 0.0005
-    elif epoch < 30:
-        return 0.0002
-    return 0.0001
+    return 0.0002/(2**(epoch//10))
 
 
 # In[10]:
@@ -363,7 +359,7 @@ def lr_schedule(epoch):
 # Define model callbacks.
 
 # TODO: Set the filepath under which you want to save the model.
-model_checkpoint = ModelCheckpoint(filepath='./models/belgas_sgd/epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
+model_checkpoint = ModelCheckpoint(filepath='./models/belgas_adam/epoch-{epoch:02d}_loss-{loss:.4f}_val_loss-{val_loss:.4f}.h5',
                                    monitor='val_loss',
                                    verbose=1,
                                    save_best_only=True,
@@ -372,7 +368,7 @@ model_checkpoint = ModelCheckpoint(filepath='./models/belgas_sgd/epoch-{epoch:02
                                    period=3)
 #model_checkpoint.best = 
 
-csv_logger = CSVLogger(filename='./models/belgas_sgd_3_training_log.csv',
+csv_logger = CSVLogger(filename='./models/belgas_adam_3_training_log.csv',
                        separator=',',
                        append=True)
 
@@ -400,8 +396,8 @@ callbacks = [model_checkpoint,
 
 
 # If you're resuming a previous training, set `initial_epoch` and `final_epoch` accordingly.
-initial_epoch   = 30
-final_epoch     = 100
+initial_epoch   = 0
+final_epoch     = 50
 steps_per_epoch = 100
 
 
