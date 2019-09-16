@@ -17,7 +17,8 @@ parser.add_argument("--end_epoch",required=True)
 parser.add_argument("--momentum")
 parser.add_argument("--fixed_lr")
 parser.add_argument("--batch_size") # different batch sizes to try
-parser.add_argument("--lr") # comma separated string with  #learning rate drops values
+parser.add_argument("--epoch_sizes")
+parser.add_argument("--lr_drops") # comma separated string with  #learning rate drops values
 flags = parser.parse_args() # make sure to tune learning schedule!
 
 
@@ -184,18 +185,10 @@ val_dataset_size   = val_dataset.get_dataset_size()
 print("Number of images in the training dataset:\t{:>6}".format(train_dataset_size))
 print("Number of images in the validation dataset:\t{:>6}".format(val_dataset_size))
 
-lr_drops = list(map(float,flags.lr.split(",")))
+lr_drops = list(map(float,flags.lr_drops.split(",")))
+epoch_sizes = np.array(list(map(int,flags.epoch_sizes.split(","))))
 def lr_schedule(epoch):
-    if flags.fixed_lr is not None:
-        return float(flags.fixed_lr)
-    if epoch < 20:
-        return lr_drops[0]
-    elif epoch < 50:
-        return lr_drops[1]
-    elif epoch < 100:
-        return lr_drops[2]
-    else:
-        return lr_drops[3]
+    return lr_drops[np.max(np.where(epoch>=epoch_sizes))]
 
 model_checkpoint = ModelCheckpoint(filepath=flags.saved_models,
                                    monitor='val_loss',
@@ -225,7 +218,7 @@ steps_per_epoch = 100
 
 history = model.fit_generator(generator=train_generator,
                               use_multiprocessing=True,
-                              workers=50,
+                              workers=64,
                               steps_per_epoch=steps_per_epoch,
                               epochs=final_epoch,
                               callbacks=callbacks,
