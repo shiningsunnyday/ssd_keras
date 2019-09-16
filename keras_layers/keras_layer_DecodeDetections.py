@@ -174,12 +174,12 @@ class DecodeDetections(Layer):
                 class_id = tf.fill(dims=tf.shape(confidences), value=tf.to_float(index))
                 box_coordinates = batch_item[...,-4:]
 
-                single_class = tf.concat([class_id, confidences, box_coordinates], axis=-1)
+                single_class = tf.concat([class_id, confidences, box_coordinates], axis=-1)  # (nboxes, 1 + 1)
 
                 # Apply confidence thresholding with respect to the class defined by `index`.
                 threshold_met = single_class[:,1] > self.tf_confidence_thresh
                 single_class = tf.boolean_mask(tensor=single_class,
-                                               mask=threshold_met)
+                                               mask=threshold_met) # (number of pos boxes, 1)
 
                 # If any boxes made the threshold, perform NMS.
                 def perform_nms():

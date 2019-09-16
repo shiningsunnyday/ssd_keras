@@ -495,14 +495,14 @@ class DataGenerator:
 
                     # Parse the data for each object.
                     for obj in objects:
-                        class_name = obj.find('name', recursive=False).text
+                        class_name = obj.find('name', recursive=False).text.lower()
                         try:
                             class_id = self.classes.index(class_name)
                             class_name = self.classes[class_id]
                         except ValueError:
                             class_id = -1
                             for c in classes:
-                                if class_name.find(c) > -1:
+                                if class_name.find(c) > -1 and class_name.find('text') == -1:
                                     class_id = self.classes.index(c)
                                     class_name = self.classes[class_id]
                             if class_id < 0:

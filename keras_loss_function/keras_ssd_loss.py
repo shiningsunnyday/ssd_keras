@@ -18,6 +18,7 @@ limitations under the License.
 
 from __future__ import division
 import tensorflow as tf
+import numpy as np
 
 class SSDLoss:
     '''
@@ -202,6 +203,8 @@ class SSDLoss:
         # 4: Compute the total loss.
 
         total_loss = (class_loss + self.alpha * loc_loss) / tf.maximum(1.0, n_positive) # In case `n_positive == 0`
+        # with open('loss_test.txt',mode='ab') as file:
+        #     np.save(file, [total_loss, class_loss/tf.maximum(1.0,n_positive), loc_loss/tf.maximum(1.0,n_positive)])
         # Keras has the annoying habit of dividing the loss by the batch size, which sucks in our case
         # because the relevant criterion to average our loss over is the number of positive boxes in the batch
         # (by which we're dividing in the line above), not the batch size. So in order to revert Keras' averaging
