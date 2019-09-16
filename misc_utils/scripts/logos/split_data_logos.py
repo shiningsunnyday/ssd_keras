@@ -3,7 +3,7 @@ import numpy as np
 from sklearn.model_selection import train_test_split
 import pdb
 
-loc_gt = np.loadtxt('../../../../datasets/LogosInTheWild-v2/LogosClean/commonformat/ImageSets/top_only.txt', dtype=str)
+loc_gt = np.loadtxt('../../../../datasets/LogosInTheWild-v2/LogosClean/commonformat/ImageSets/car_only.txt', dtype=str)
 np.random.seed(1)
 X = loc_gt
 
@@ -40,5 +40,5 @@ while divergence > 0.005: # forcing distribution to be very similar
 # X_train.to_csv('../../datasets/train_.csv',index=False)
 # X_test.to_csv('../../datasets/test_.csv',index=False)
 
-np.savetxt('../../../../datasets/LogosInTheWild-v2/LogosClean/commonformat/ImageSets/top_only_train.txt', X_train, fmt='%s')
-np.savetxt('../../../../datasets/LogosInTheWild-v2/LogosClean/commonformat/ImageSets/top_only_test.txt', X_test, fmt='%s')
+np.savetxt('../../../../datasets/LogosInTheWild-v2/LogosClean/commonformat/ImageSets/car_only_train.txt', X_train, fmt='%s')
+np.savetxt('../../../../datasets/LogosInTheWild-v2/LogosClean/commonformat/ImageSets/car_only_test.txt', X_test, fmt='%s')

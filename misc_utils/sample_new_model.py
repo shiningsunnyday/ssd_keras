@@ -8,7 +8,7 @@ import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument("--output",required=True)
 parser.add_argument("--num_classes",required=True)
-parser.add_argument("--source",default='../base_models/VGG_coco_SSD_300x300_iter_400000.h5')
+parser.add_argument("--source",default='base_models/VGG_coco_SSD_300x300_iter_400000.h5')
 flags = parser.parse_args()
 weights_source_path = flags.source
 weights_destination_path = flags.output
@@ -25,23 +25,19 @@ shutil.copy(weights_source_path, weights_destination_path)
 weights_source_file = h5py.File(weights_source_path, 'r')
 weights_destination_file = h5py.File(weights_destination_path)
 
+# classifier_names = ['conv4_3_norm_mbox_conf',
+#                     'fc7_mbox_conf',
+#                     'conv6_2_mbox_conf',
+#                     'conv7_2_mbox_conf',
+#                     'conv8_2_mbox_conf',
+#                     'conv9_2_mbox_conf']
 
-# ## 2. Figure out which weight tensors we need to sub-sample
-# 
-# Next, we need to figure out exactly which weight tensors we need to sub-sample. As mentioned above, the weights for all layers except the classification layers are fine, we don't need to change anything about those.
-# 
-# So which are the classification layers in SSD300? Their names are:
-
-# In[5]:
-
-
-classifier_names = ['conv4_3_norm_mbox_conf',
-                    'fc7_mbox_conf',
-                    'conv6_2_mbox_conf',
-                    'conv7_2_mbox_conf',
-                    'conv8_2_mbox_conf',
-                    'conv9_2_mbox_conf']
-
+classifier_names = ['block_11_conf',
+                    'block_9_conf',
+                    'block_13_conf',
+                    'block_7_conf',
+                    'block_5_conf',
+                    'block_4_conf']
 
 # ## 3. Figure out which slices to pick
 # 
@@ -51,9 +47,8 @@ classifier_names = ['conv4_3_norm_mbox_conf',
 
 # In[6]:
 
-
-conv4_3_norm_mbox_conf_kernel = weights_source_file[classifier_names[0]][classifier_names[0]]['kernel:0']
-conv4_3_norm_mbox_conf_bias = weights_source_file[classifier_names[0]][classifier_names[0]]['bias:0']
+conv4_3_norm_mbox_conf_kernel = weights_source_file['model_weights'][classifier_names[0]][classifier_names[0]]['kernel:0']
+conv4_3_norm_mbox_conf_bias = weights_source_file['model_weights'][classifier_names[0]][classifier_names[0]]['bias:0']
 
 print("Shape of the '{}' weights:".format(classifier_names[0]))
 print()
@@ -104,10 +99,10 @@ print("bias:\t", conv4_3_norm_mbox_conf_bias.shape)
 # In[7]:
 
 
-n_classes_source = 81
-classes_of_interest = int(flags.num_classes)
-
-subsampling_indices = []
+# n_classes_source = 81
+# classes_of_interest = [0,4,]
+#
+# subsampling_indices = []
 # for i in range(int(324/n_classes_source)):
 #     indices = np.array(classes_of_interest) + i * n_classes_source
 #     subsampling_indices.append(indices)
@@ -144,12 +139,12 @@ n_classes_source = 81
 #       include the background class. That is, if you set an integer, and you want `n` positive classes,
 #       then you must set `classes_of_interest = n + 1`.
 # classes_of_interest = [0, 3, 8, 1, 2, 10, 4, 6, 12]
-classes_of_interest = int(flags.num_classes) # Uncomment this in case you want to just randomly sub-sample the last axis instead of providing a list of indices.
+classes_of_interest = 16 # Uncomment this in case you want to just randomly sub-sample the last axis instead of providing a list of indices.
 
 for name in classifier_names:
     # Get the trained weights for this layer from the source HDF5 weights file.
-    kernel = weights_source_file[name][name]['kernel:0'].value
-    bias = weights_source_file[name][name]['bias:0'].value
+    kernel = weights_source_file['model_weights'][name][name]['kernel:0'].value
+    bias = weights_source_file['model_weights'][name][name]['bias:0'].value
 
     # Get the shape of the kernel. We're interested in sub-sampling
     # the last dimension, 'o'.
@@ -182,11 +177,11 @@ for name in classifier_names:
                                           stddev=0.005)
     
     # Delete the old weights from the destination file.
-    del weights_destination_file[name][name]['kernel:0']
-    del weights_destination_file[name][name]['bias:0']
+    del weights_destination_file['model_weights'][name][name]['kernel:0']
+    del weights_destination_file['model_weights'][name][name]['bias:0']
     # Create new datasets for the sub-sampled weights.
-    weights_destination_file[name][name].create_dataset(name='kernel:0', data=new_kernel)
-    weights_destination_file[name][name].create_dataset(name='bias:0', data=new_bias)
+    weights_destination_file['model_weights'][name][name].create_dataset(name='kernel:0', data=new_kernel)
+    weights_destination_file['model_weights'][name][name].create_dataset(name='bias:0', data=new_bias)
 
 # Make sure all data is written to our output file before this sub-routine exits.
 weights_destination_file.flush()
@@ -199,8 +194,8 @@ weights_destination_file.flush()
 # In[44]:
 
 
-conv4_3_norm_mbox_conf_kernel = weights_destination_file[classifier_names[0]][classifier_names[0]]['kernel:0']
-conv4_3_norm_mbox_conf_bias = weights_destination_file[classifier_names[0]][classifier_names[0]]['bias:0']
+conv4_3_norm_mbox_conf_kernel = weights_destination_file['model_weights'][classifier_names[0]][classifier_names[0]]['kernel:0']
+conv4_3_norm_mbox_conf_bias = weights_destination_file['model_weights'][classifier_names[0]][classifier_names[0]]['bias:0']
 
 print("Shape of the '{}' weights:".format(classifier_names[0]))
 print()
